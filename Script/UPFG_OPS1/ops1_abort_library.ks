@@ -276,12 +276,15 @@ FUNCTION setup_RTLS {
 	//need to do the vehicle performance recalculations first because we need to know the time to burnout
 	SET vehicle["stages"][2]["staging"]["type"] TO "depletion".
 	SET vehicle["stages"][2]["mode"] TO 1.
-	SET vehicle["stages"][2]["m_final"] TO vehicle["stages"][3]["m_final"].
-	SET vehicle["stages"][2]["m_burn"] TO vehicle["stages"][2]["m_initial"] - vehicle["stages"][2]["m_final"].
-	LOCAL red_flow IS vehicle["stages"][2]["engines"]["thrust"]/(vehicle["stages"][2]["engines"]["isp"]*g0).
-	SET vehicle["stages"][2]["Tstage"] TO vehicle["stages"][2]["m_burn"]/red_flow.
 	vehicle["stages"][2]:REMOVE("glim").
-	vehicle["stages"]:REMOVE(3).
+	
+	LOCAL current_m IS SHIP:MASS*1000.
+	local res_left IS get_prop_mass(cur_stg).
+	
+	SET vehicle["stages"] TO vehicle["stages"]:SUBLIST(0,3).
+	
+	update_stage2(current_m, res_left).
+
 	
 	vehicle:ADD("mbod",0).
 	
@@ -860,18 +863,19 @@ FUNCTION setup_TAL {
 	SET target_orbit["apoapsis"] TO (target_orbit["radius"]:MAG - BODY:RADIUS)/1000.
 	
 	SET target_orbit TO TAL_cutoff_params(target_orbit, target_orbit["radius"]).
-		
-	
 	SET TALAbort["tgt_vec"] TO TAL_tgt_vec(orbitstate["radius"]).
+	
 	
 	SET vehicle["stages"][2]["staging"]["type"] TO "depletion".
 	SET vehicle["stages"][2]["mode"] TO 1.
-	SET vehicle["stages"][2]["m_final"] TO vehicle["stages"][3]["m_final"].
-	SET vehicle["stages"][2]["m_burn"] TO vehicle["stages"][2]["m_initial"] - vehicle["stages"][2]["m_final"].
-	LOCAL red_flow IS vehicle["stages"][2]["engines"]["thrust"]/(vehicle["stages"][2]["engines"]["isp"]*g0).
-	SET vehicle["stages"][2]["Tstage"] TO vehicle["stages"][2]["m_burn"]/red_flow.											   
 	vehicle["stages"][2]:REMOVE("glim").
-	vehicle["stages"]:REMOVE(3).
+	
+	LOCAL current_m IS SHIP:MASS*1000.
+	local res_left IS get_prop_mass(cur_stg).
+	
+	SET vehicle["stages"] TO vehicle["stages"]:SUBLIST(0,3).
+	
+	update_stage2(current_m, res_left).
 	
 	SET upfgInternal TO resetUPFG(upfgInternal).
 	
@@ -968,21 +972,32 @@ FUNCTION setup_ATO {
 	
 	//need to take care of the stages, contrary to RTLS and TAL we might already be in constant-G mode
 	IF (vehiclestate["cur_stg"]=2) {
+	
 		SET vehicle["stages"][2]["staging"]["type"] TO "depletion".
 		SET vehicle["stages"][2]["mode"] TO 1.
-		SET vehicle["stages"][2]["m_final"] TO vehicle["stages"][3]["m_final"].
-		SET vehicle["stages"][2]["m_burn"] TO vehicle["stages"][2]["m_initial"] - vehicle["stages"][2]["m_final"].
-		LOCAL red_flow IS vehicle["stages"][2]["engines"]["thrust"]/(vehicle["stages"][2]["engines"]["isp"]*g0).
-		SET vehicle["stages"][2]["Tstage"] TO vehicle["stages"][2]["m_burn"]/red_flow.										
 		vehicle["stages"][2]:REMOVE("glim").
-		vehicle["stages"]:REMOVE(3).
+		
+		LOCAL current_m IS SHIP:MASS*1000.
+		local res_left IS get_prop_mass(cur_stg).
+		
+		SET vehicle["stages"] TO vehicle["stages"]:SUBLIST(0,3).
+		
+		update_stage2(current_m, res_left).
+		
 	} ELSe IF (vehiclestate["cur_stg"]=3) {
+	
 		SET vehicle["stages"][3]["staging"]["type"] TO "depletion".
 		SET vehicle["stages"][3]["mode"] TO 1.
+		vehicle["stages"][3]:REMOVE("glim").
 		SET vehicle["stages"][3]["Throttle"] TO 1.
+	
+		SET vehicle["stages"][3]["staging"]["type"] TO "depletion".
+		SET vehicle["stages"][3]["mode"] TO 1.
+		
 		LOCAL red_flow IS vehicle["stages"][3]["engines"]["thrust"]/(vehicle["stages"][3]["engines"]["isp"]*g0).
 		SET vehicle["stages"][3]["Tstage"] TO vehicle["stages"][3]["m_burn"]/red_flow.							
 		vehicle["stages"][3]:REMOVE("glim").
+		
 	} 
 	
 	SET upfgInternal TO resetUPFG(upfgInternal).

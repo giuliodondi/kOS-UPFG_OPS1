@@ -232,7 +232,7 @@ function initialise_shuttle {
 	vehicle:ADD("preburn",5.1).
 	vehicle:ADD(
 		"handover",
-		LEXICON("time", vehicle["stages"][1]["Tstage"] + 5)
+		LEXICON("time", 1000)
 	).
 	vehicle:REMOVE("Ext_Tank_Part").
 	vehicle:REMOVE("SRB_time").
@@ -258,6 +258,49 @@ FUNCTION debug_vehicle {
 		wait 0.1.
 	}
 }
+
+
+
+//returns the list of parts making up the Orbiter and External Tank
+function getShuttleParts {
+
+	function removeChildrenPartsRecursively {
+		parameter partslist.
+		parameter part.
+		
+		local partchildren is part:children:copy.
+		
+		if partchildren:length > 0 {
+			for p in partchildren {
+			
+				removeChildrenPartsRecursively(
+					partslist,
+					p 
+				).
+			
+			}
+		}
+		
+		partslist:remove(partslist:find(part)).
+		return.
+
+	}
+	
+	
+	local et is ship:partsdubbed("ShuttleExtTank")[0].
+
+	local shuttleParts is ship:parts:copy.
+
+	removeChildrenPartsRecursively(
+		shuttleParts,
+		et
+	).
+
+	shuttleParts:add(et).
+	
+	return shuttleParts.
+}
+
 
 
 
@@ -391,7 +434,7 @@ FUNCTION thrust_vec {
 //	Throttle controller
 FUNCTION throttleControl {
 
-	local stg IS vehicle["stages"][vehiclestate["cur_stg"]].
+	local stg IS get_stage().
 	local throtval is stg["Throttle"].
 	
 	LOCAL minthrot IS 0.
@@ -401,6 +444,7 @@ FUNCTION throttleControl {
 	
 	IF stg["mode"] = 2   {
 		SET throtval TO stg["throt_mult"]*SHIP:MASS*1000.
+		SET stg["Throttle"] TO throtval.
 		SET usc["lastthrot"] TO throtval.
 	}
 	
@@ -503,17 +547,17 @@ FUNCTION const_G_t_m {
 	PARAMETER stg.
 	local out is LIST(0,0).
 
-	local glim is stg["glim"].
+	local red_isp is stg["engines"]["isp"]/stg["glim"].
 	
 	//compute burn time until  we deplete the stage.	
 	
-	LOCAL maxtime IS (stg["engines"]["isp"]/glim) * LN(1 + stg["m_burn"]/stg["m_final"] ).
+	LOCAL maxtime IS red_isp * LN(1 + stg["m_burn"]/stg["m_final"] ).
 	
 	//compute burn time until  we reach minimum throttle.	
-	LOCAL limtime IS - stg["engines"]["isp"]/glim * LN(stg["minThrottle"]).
+	LOCAL limtime IS - red_isp * LN(stg["minThrottle"]).
 
 	//calculate mass of the fuel burned until violation
-	LOCAL mviol IS stg["m_initial"]*CONSTANT:E^(-glim*limtime/stg["engines"]["isp"]).
+	LOCAL mviol IS stg["m_initial"]*CONSTANT:E^(- limtime/red_isp).
 	
 	IF mviol > stg["m_final"]  {
 		SET out[1] TO mviol.
@@ -562,18 +606,15 @@ FUNCTION get_TWR {
 FUNCTION get_prop_mass {
 	PARAMETER stg.
 	
-	local tanklist is stg["tankparts"].
 	local reslist is stg["resources"].
 	local prop_mass IS 0.
 	
-	FOR tk IN tanklist {
-		FOR tkres In tk:RESOURCES {
-			FOR res IN reslist:KEYS {
-				IF tkres:NAME = res {
-					set prop_mass TO prop_mass + tkres:amount*reslist[res].
-				}
-		
+	FOR tkres In stg["ext_tank"]:RESOURCES {
+		FOR res IN reslist:KEYS {
+			IF tkres:NAME = res {
+				set prop_mass TO prop_mass + tkres:amount*reslist[res].
 			}
+	
 		}
 	}
 	set prop_mass to prop_mass*1000.
@@ -602,10 +643,6 @@ FUNCTION getState {
 	SET surfacestate["vs"] TO SHIP:VERTICALSPEED.
 	SET surfacestate["hs"] TO SHIP:VELOCITY:SURFACE:MAG.
 	
-	IF (surfacestate:HASKEY("q") AND surfacestate["alt"] > 100 ) {
-		check_maxq(SHIP:Q).
-	}
-	
 	SET orbitstate["velocity"] TO vecYZ(SHIP:ORBIT:VELOCITY:ORBIT).
 	SET orbitstate["radius"] TO vecYZ(SHIP:ORBIT:BODY:POSITION)*-1.
 	
@@ -613,8 +650,7 @@ FUNCTION getState {
 	
 	//measure and compute vehicle performance parameters
 	
-	local stg IS get_stage().
-	local stg_staginginfo IS vehicle["stages"][vehiclestate["cur_stg"]]["staging"]["type"].
+	LOCAL cur_stg IS get_stage().
 	
 	LOCAL x IS get_thrust_isp().
 	LOCAL avg_thrust is x[0].
@@ -622,97 +658,135 @@ FUNCTION getState {
 
 	IF NOT (vehiclestate["staging_in_progress"]) {
 		
-		SET vehicle["stages"][vehiclestate["cur_stg"]]["m_initial"] TO SHIP:MASS*1000.
-		local res_left IS get_prop_mass(vehicle["stages"][vehiclestate["cur_stg"]]).
+		LOCAL current_m IS SHIP:MASS*1000.
+		local res_left IS get_prop_mass(cur_stg).
 		
 		
 		IF (vehiclestate["cur_stg"]=1) {
 		
-			SET vehicle["stages"][1]["Tstage"] TO vehicle["stages"][1]["Tstage"] - deltat.
+			//do it here so we bypass the check during later stages
+			IF (surfacestate:HASKEY("q") AND surfacestate["alt"] > 100 ) {
+				check_maxq(SHIP:Q).
+			}
+		
+			SET cur_stg["Tstage"] TO cur_stg["Tstage"] - deltat.
 			
 		} ELSE IF (vehiclestate["cur_stg"]=2) {
 		
-			SET vehicle["stages"][2]["m_burn"] TO res_left.
-		
-			IF (stg_staginginfo="glim") {
-			
-				LOCAL y IS glim_t_m(vehicle["stages"][2]).
-			
-				SET vehicle["stages"][2]["m_final"] TO y[1].
-				SET vehicle["stages"][2]["m_burn"] TO vehicle["stages"][2]["m_initial"] - y[1].
-				
-				SET vehicle["stages"][3]["m_initial"] TO y[1].
-				SET vehicle["stages"][3]["m_burn"] TO res_left - vehicle["stages"][2]["m_burn"].
-				SET vehicle["stages"][3]["m_final"] TO vehicle["stages"][3]["m_initial"] - vehicle["stages"][3]["m_burn"].
-
-				LOCAL z IS const_G_t_m(vehicle["stages"][3]).
-				SET vehicle["stages"][3]["Tstage"] TO z[0].
-				
-				IF (stg_staginginfo="minthrot") {
-				
-					SET vehicle["stages"][4]["m_final"] TO vehicle["stages"][3]["m_final"].
-					SET vehicle["stages"][3]["m_final"] TO z[1].
-					SET vehicle["stages"][4]["m_initial"] TO z[1].
-					
-					SET vehicle["stages"][3]["m_burn"] TO vehicle["stages"][3]["m_initial"] - vehicle["stages"][3]["m_final"].
-					SET vehicle["stages"][4]["m_burn"] TO vehicle["stages"][4]["m_initial"] - vehicle["stages"][4]["m_final"].
-					
-					LOCAL red_flow IS vehicle["stages"][4]["engines"]["thrust"]*vehicle["stages"][4]["throttle"]/(vehicle["stages"][4]["engines"]["isp"]*g0).
-					SET vehicle["stages"][4]["Tstage"] TO vehicle["stages"][4]["m_burn"]/red_flow.
-				
-				}
-			
-			} ELSE IF (stg_staginginfo="depletion") {
-			
-				LOCAL red_flow IS vehicle["stages"][2]["engines"]["thrust"]*vehicle["stages"][2]["throttle"]/(vehicle["stages"][2]["engines"]["isp"]*g0).
-				SET vehicle["stages"][2]["Tstage"] TO vehicle["stages"][2]["m_burn"]/red_flow.
-			
-			}
-		
+			update_stage2(current_m, res_left).
+	
 		} ELSE IF (vehiclestate["cur_stg"]=3) {
 			
-			SET vehicle["stages"][3]["m_final"] TO vehicle["stages"][3]["m_initial"] - res_left.
-			SET vehicle["stages"][3]["m_burn"] TO res_left.
-		
-			LOCAL z IS const_G_t_m(vehicle["stages"][3]).
-			
-			SET vehicle["stages"][3]["Tstage"] TO z[0].
-			
-			IF (stg_staginginfo="minthrot") {
-				
-				SET vehicle["stages"][4]["m_final"] TO vehicle["stages"][3]["m_final"].
-				SET vehicle["stages"][3]["m_final"] TO z[1].
-				SET vehicle["stages"][4]["m_initial"] TO z[1].
-				
-				SET vehicle["stages"][3]["m_burn"] TO vehicle["stages"][3]["m_initial"] - vehicle["stages"][3]["m_final"].
-				SET vehicle["stages"][4]["m_burn"] TO vehicle["stages"][4]["m_initial"] - vehicle["stages"][4]["m_final"].
-				
-				LOCAL red_flow IS vehicle["stages"][4]["engines"]["thrust"]*vehicle["stages"][4]["throttle"]/(vehicle["stages"][4]["engines"]["isp"]*g0).
-				SET vehicle["stages"][4]["Tstage"] TO vehicle["stages"][4]["m_burn"]/red_flow.
-			
-			}
+			update_stage3(current_m, res_left).
 		
 		} ELSE IF (vehiclestate["cur_stg"]=4) {
 			
-			SET vehicle["stages"][4]["m_burn"] TO res_left.
+			update_stage4(current_m, res_left).
+		}
+	
+	}
+}
+
+FUNCTION update_stage2 {
+	PARAMETER m_initial.
+	PARAMETER res_left.
+	PARAMETER stg2 IS vehicle["stages"][2].
+
+	SET stg2["m_initial"] TO m_initial.
+	SET stg2["m_burn"] TO res_left.
+	SET stg2["m_final"] TO m_initial - res_left.
+	
+	IF (stg2["staging"]["type"]="depletion") {
+		
+		LOCAL red_flow IS stg2["engines"]["thrust"] * stg2["throttle"]/(stg2["engines"]["isp"]*g0).
+		SET stg2["Tstage"] TO stg2["m_burn"]/red_flow.	
+		
+	} ELSE IF (stg2["staging"]["type"]="glim") {
+		//assume the g limit will be exceeded 
+		
+		LOCAL x IS glim_t_m(stg2).
+		
+		SET stg2["Tstage"] TO x[0]. 
+		SET stg2["m_final"] TO x[1]. 
+		SET stg2["m_burn"] TO m_initial - x[1].
+		
+		LOCAL stg3_m_initial IS x[1].
+		LOCAL stg3_m_burn IS res_left - stg2["m_burn"].
+		
+		update_stage3(stg3_m_initial, stg3_m_burn).
+	}
+
+}
+
+
+
+FUNCTION update_stage3 {
+	PARAMETER m_initial.
+	PARAMETER res_left.
+	PARAMETER stg3 IS vehicle["stages"][3].
+	
+	SET stg3["m_initial"] TO m_initial.
+	SET stg3["m_burn"] TO res_left.
+	SET stg3["m_final"] TO m_initial - res_left.
+	
+	IF stg["mode"]=1 {
+		//constant thrust depletion stage, only used for late ATO aborts
+		
+		LOCAL red_flow IS stg3["engines"]["thrust"] * stg3["throttle"]/(stg3["engines"]["isp"]*g0).
+		SET stg3["Tstage"] TO stg3["m_burn"]/red_flow.
+	
+	} ELSE IF stg["mode"]=2 {
+	
+		LOCAL x IS const_G_t_m(stg3).
+		SET stg3["Tstage"] TO x[0].
+
+		IF (stg3["staging"]["type"]="minthrot") {
+			//there is a fourth stage, assume there will be a violation of minimum throttle 
 			
-			LOCAL red_flow IS vehicle["stages"][4]["engines"]["thrust"]*vehicle["stages"][4]["throttle"]/(vehicle["stages"][4]["engines"]["isp"]*g0).
-			SET vehicle["stages"][4]["Tstage"] TO vehicle["stages"][4]["m_burn"]/red_flow.
+			SET stg3["m_final"] TO x[1].
+			LOCAL stg4_m_initial IS x[1].
+			
+			SET stg3["m_burn"] TO m_initial - x[1].
+			LOCAL stg4_m_burn IS res_left - stg3["m_burn"].
+
+			update_stage4(stg4_m_initial, stg4_m_burn).
 			
 		}
 	
 	}
 }
 
+
+FUNCTION update_stage4 {
+	PARAMETER m_initial.
+	PARAMETER res_left.
+	PARAMETER stg4 IS vehicle["stages"][4].
+	
+	//assume it's a depletion stage
+	
+	
+	SET stg4["m_initial"] TO m_initial.
+	SET stg4["m_burn"] TO res_left.
+	SET stg4["m_final"] TO m_initial - res_left.
+	
+	LOCAL red_flow IS stg4["engines"]["thrust"] * stg4["throttle"]/(stg4["engines"]["isp"]*g0).
+	SET stg4["Tstage"] TO stg4["m_burn"]/red_flow.
+	
+}
+
+
+
 FUNCTION increment_stage {
 	
 	SET vehiclestate["staging_time"] TO TIME:SECONDS.
 	
-	SET vehiclestate["cur_stg"] TO vehiclestate["cur_stg"] + 1.
-			
-	SET vehicle["stages"][vehiclestate["cur_stg"] - 1] TO 0.
+	LOCAL j IS vehiclestate["cur_stg"].
 	
-	SET vehicle["stages"][vehiclestate["cur_stg"]]["ign_t"] TO TIME:SECONDS.
+	SET vehiclestate["cur_stg"] TO j + 1.
+			
+	SET vehicle["stages"][j] TO 0.
+	
+	SET vehicle["stages"][j+1]["ign_t"] TO vehiclestate["staging_time"].
 	
 	IF ops_mode=2 {
 		SET usc["lastthrot"] TO stg["Throttle"].
@@ -737,14 +811,14 @@ FUNCTION srb_staging {
 		addMessage("STAND-BY FOR SRB SEP").
 		
 		
-		WHEN (get_TWR()<=1) THEN {
+		WHEN (get_TWR()<1) THEN {
 		
 			wait until stage:ready.
 			STAGE.
 		
 			increment_stage().
 			
-			SET vehicle["handover"]["time"] TO vehiclestate["staging_time"] + 5.
+			SET vehicle["handover"]["time"] TO vehiclestate["staging_time"] - vehicle["ign_t"] + 5.
 		}
 	}
 	
@@ -773,6 +847,25 @@ FUNCTION is_flameout_imminent {
 	LOCAL j IS vehiclestate["cur_stg"].
 	
 	RETURN ( (vehicle["stages"][j]["Tstage"] <= 3) AND (j = vehicle["stages"]:LENGTH) ). 
+
+}
+
+
+
+//simple function to check if vehicle is past maxq
+FUNCTION check_maxq {
+	PARAMETER newq.
+	
+	IF (newq >=  surfacestate["q"] ) {
+		SET surfacestate["q"] TO newq.
+	} ELSE {
+		addMessage("VEHICLE HAS REACHED MAX-Q").
+		surfacestate:REMOVE("q").
+		WHEN (SHIP:Q < 0.95*newq) THEN {
+			addMessage("THROTTLING UP").
+			SET vehicle["stages"][1]["Throttle"] TO 1.
+		}
+	}
 
 }
 

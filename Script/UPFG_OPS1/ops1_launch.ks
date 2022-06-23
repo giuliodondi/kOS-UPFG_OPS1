@@ -122,13 +122,12 @@ declare function open_loop_ascent{
 	drawUI().
 	addMessage("LIFT-OFF!").
 	
-	SET STEERINGMANAGER:MAXSTOPPINGTIME TO 1.5.
+	SET STEERINGMANAGER:MAXSTOPPINGTIME TO 1.8.
 	
 	//this sets the pilot throttle command to some value so that it's not zero if the program is aborted
 	SET SHIP:CONTROL:PILOTMAINTHROTTLE TO vehicle["stages"][vehiclestate["cur_stg"]]["Throttle"].
 	
 	
-	get_mass_bias().
 	getState().
 
 	SET control["steerdir"] TO LOOKDIRUP(-SHIP:ORBIT:BODY:POSITION, SHIP:FACING:TOPVECTOR).
@@ -208,15 +207,20 @@ declare function closed_loop_ascent{
 		//detect terminal conditions
 		
 		//see if we're at the last stage and close to flameout 
-		IF is_flameout_imminent() {BREAK.}
+		IF is_flameout_imminent() {
+			addMessage("LOw LEVEL").
+			BREAK.
+		}
 		
 		//check for orbital terminal conditions 
 		IF (DEFINED RTLSAbort) {
 			IF ( RTLSAbort["flyback_flag"] AND ( (usc["conv"]=1 AND upfgInternal["tgo"] < upfgFinalizationTime ) OR ( (usc["conv"]<>1 OR SHIP:VELOCITY:ORBIT:MAG>= 0.9*target_orbit["velocity"]) AND upfgInternal["tgo"] < 60 ) ) ) {
+				addMessage("POWERED PITCH-DOWN").
 				BREAK.
 			}
 		} ELSE {
 			IF (usc["conv"]=1 AND (upfgInternal["tgo"] < upfgFinalizationTime AND SHIP:VELOCITY:ORBIT:MAG>= 0.9*target_orbit["velocity"])) OR (SHIP:VELOCITY:ORBIT:MAG>= 0.995*target_orbit["velocity"]) {
+				addMessage("TERMINAL GUIDANCE").
 				BREAK.
 			}
 		}
@@ -257,8 +261,6 @@ declare function closed_loop_ascent{
 		LOCAL upvec IS -SHIP:ORBIT:BODY:POSITION:NORMALIZED.
 		
 		LOCAL rotvec IS VCRS(-SHIP:ORBIT:BODY:POSITION:NORMALIZED, SHIP:VELOCITY:SURFACE:NORMALIZED):NORMALIZED.								  
-		
-		addMessage("POWERED PITCH-DOWN").
 		
 		SET STEERINGMANAGER:MAXSTOPPINGTIME TO 1.2.
 		
@@ -323,9 +325,6 @@ declare function closed_loop_ascent{
 	
 	RCS ON.
 	
-	SET vehiclestate["staging_in_progress"] TO TRUE.	//so that vehicle perf calculations are skipped in getState
-	
-	
 	//ET sep loop
 	LOCAL etsep_t IS TIME:SECONDS.
 	WHEN ( TIME:SECONDS > etsep_t + 1.5) THEN {
@@ -335,11 +334,6 @@ declare function closed_loop_ascent{
 			STAGE.
 			
 			WHEN ( TIME:SECONDS > etsep_t + 15) THEN {
-				SET SHIP:CONTROL:NEUTRALIZE TO TRUE.
-				UNLOCK THROTTLE.
-				UNLOCK STEERING.
-				UNLOCK THROTTLE.
-				SAS ON.
 				close_umbilical().
 				disable_TVC().
 				SET ops_mode TO 4.
@@ -366,9 +360,12 @@ declare function closed_loop_ascent{
 		RETURN.
 	}
 	
+	SET vehiclestate["staging_in_progress"] TO TRUE.	//so that vehicle perf calculations are skipped in getState
+	
 	UNLOCK THROTTLE.
 	UNLOCK STEERING.
 	SET SHIP:CONTROL:NEUTRALIZE TO TRUE.
+	SAS ON.
 	
 	
 	
