@@ -202,13 +202,21 @@ declare function closed_loop_ascent{
 			WHEN usc["conv"]=1 THEN {
 				addMessage("GUIDANCE CONVERGED IN " + usc["itercount"] + " ITERATIONS").
 			}
-		}														  
+		}				
+
+		//abort must be set up before getstate so the stage is reconfigured 
+		//and then adjusted to the current fuel mass
+		monitor_abort().
+		//move it here so that we have the most accurate time figure for staging checks
+		getState().
+		
 		
 		//detect terminal conditions
 		
 		//see if we're at the last stage and close to flameout 
-		IF is_flameout_imminent() {
-			addMessage("LOw LEVEL").
+		//this also takes care of staging during ssme phase
+		IF ssme_staging_flameout() {
+			addMessage("LOW LEVEL").
 			BREAK.
 		}
 		
@@ -232,12 +240,6 @@ declare function closed_loop_ascent{
 			}	
 		}
 			
-		
-		
-		//abort must be set up before getstate so the stage is reconfigured 
-		//andthen adjusted to the current fuel mass
-		monitor_abort().
-		getState().
 			
 		SET upfgInternal TO upfg_wrapper(upfgInternal).
 		

@@ -363,7 +363,7 @@ FUNCTION upfg {
 			} ELSE Li:ADD( 0 ).
 			SET Lsum TO Lsum + Li[i].
 			
-			IF L>vgo:MAG {
+			IF Lsum>vgo:MAG {
 				RETURN upfg(
 					t,
 					vehicle:SUBLIST(0,vehicle:LENGTH-1),

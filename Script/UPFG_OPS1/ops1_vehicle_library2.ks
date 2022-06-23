@@ -223,7 +223,6 @@ function initialise_shuttle {
 	} 
 
 
-
 	//final vehicle parameters
 	
 	vehicle:ADD("ign_t", 0).
@@ -729,13 +728,13 @@ FUNCTION update_stage3 {
 	SET stg3["m_burn"] TO res_left.
 	SET stg3["m_final"] TO m_initial - res_left.
 	
-	IF stg["mode"]=1 {
+	IF stg3["mode"]=1 {
 		//constant thrust depletion stage, only used for late ATO aborts
 		
 		LOCAL red_flow IS stg3["engines"]["thrust"] * stg3["throttle"]/(stg3["engines"]["isp"]*g0).
 		SET stg3["Tstage"] TO stg3["m_burn"]/red_flow.
 	
-	} ELSE IF stg["mode"]=2 {
+	} ELSE IF stg3["mode"]=2 {
 	
 		LOCAL x IS const_G_t_m(stg3).
 		SET stg3["Tstage"] TO x[0].
@@ -789,7 +788,7 @@ FUNCTION increment_stage {
 	SET vehicle["stages"][j+1]["ign_t"] TO vehiclestate["staging_time"].
 	
 	IF ops_mode=2 {
-		SET usc["lastthrot"] TO stg["Throttle"].
+		SET usc["lastthrot"] TO vehicle["stages"][j+1]["Throttle"].
 	}
 	
 	vehiclestate["avg_thr"]:reset().
@@ -825,28 +824,24 @@ FUNCTION srb_staging {
 
 }
 
-FUNCTION ssme_staging {
+
+//combined function that takes care of staging during ssme burnign phase 
+//returns true when we're at the last ssme phase and close to depletion
+FUNCTION ssme_staging_flameout {
 	IF vehiclestate["staging_in_progress"] {RETURN.}
-	
-	IF 
-
-	IF (vehicle["stages"][vehiclestate["cur_stg"]]["Tstage"] <= 3) {
-		SET vehiclestate["staging_in_progress"] TO TRUE.
-		addMessage("STAND-BY FOR STAGING").
-		
-		WHEN (vehicle["stages"][vehiclestate["cur_stg"]]["Tstage"] <=0.0005) THEN {
-			increment_stage().
-		}
-	}
-
-}
-
-
-FUNCTION is_flameout_imminent {
 
 	LOCAL j IS vehiclestate["cur_stg"].
 	
-	RETURN ( (vehicle["stages"][j]["Tstage"] <= 3) AND (j = vehicle["stages"]:LENGTH) ). 
+	IF j = (vehicle["stages"]:LENGTH - 1) {
+		RETURN (vehicle["stages"][j]["Tstage"] <= 3).
+	} ELSE {
+		
+		IF (vehicle["stages"][j]["Tstage"] <=0.1) {
+			SET vehiclestate["staging_in_progress"] TO TRUE.
+			increment_stage().
+		}
+		RETURN FALSE.
+	}
 
 }
 
