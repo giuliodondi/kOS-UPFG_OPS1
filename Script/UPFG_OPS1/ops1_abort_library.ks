@@ -35,7 +35,7 @@ FUNCTION monitor_abort {
 	IF abort_detect {
 		addMessage("ENGINE OUT DETECTED.").
 		SET abort_modes["triggered"] TO TRUE.
-		SET abort_modes["t_abort"] TO MAX( current_t + 1, vehicle["handover"]["time"] + 5 ).
+		SET abort_modes["t_abort"] TO MAX( current_t + 1, vehicle["handover"]["time"] + 8 ).
 		SET abort_modes["abort_v"] TO SHIP:VELOCITY:ORBIT:MAG.
 	}
 
@@ -274,17 +274,20 @@ FUNCTION setup_RTLS {
 	}
 	
 	//need to do the vehicle performance recalculations first because we need to know the time to burnout
-	SET vehicle["stages"][2]["staging"]["type"] TO "depletion".
-	SET vehicle["stages"][2]["mode"] TO 1.
-	vehicle["stages"][2]:REMOVE("glim").
-	
-	LOCAL current_m IS SHIP:MASS*1000.
-	local res_left IS get_prop_mass(cur_stg).
 	
 	SET vehicle["stages"] TO vehicle["stages"]:SUBLIST(0,3).
 	
+	SET vehicle["stages"][2]["staging"]["type"] TO "depletion".
+	SET vehicle["stages"][2]["mode"] TO 1.
+	vehicle["stages"][2]:REMOVE("glim").
+	vehicle["stages"][2]:REMOVE("minThrottle").
+	SET ["stages"][2]["engines"] TO build_ssme_lex().
+	
+	LOCAL current_m IS SHIP:MASS*1000.
+	local res_left IS get_prop_mass(vehicle["stages"][2]).
+	
 	update_stage2(current_m, res_left).
-
+	
 	
 	vehicle:ADD("mbod",0).
 	
@@ -866,14 +869,16 @@ FUNCTION setup_TAL {
 	SET TALAbort["tgt_vec"] TO TAL_tgt_vec(orbitstate["radius"]).
 	
 	
+	SET vehicle["stages"] TO vehicle["stages"]:SUBLIST(0,3).
+	
 	SET vehicle["stages"][2]["staging"]["type"] TO "depletion".
 	SET vehicle["stages"][2]["mode"] TO 1.
 	vehicle["stages"][2]:REMOVE("glim").
+	vehicle["stages"][2]:REMOVE("minThrottle").
+	SET ["stages"][2]["engines"] TO build_ssme_lex().
 	
 	LOCAL current_m IS SHIP:MASS*1000.
-	local res_left IS get_prop_mass(cur_stg).
-	
-	SET vehicle["stages"] TO vehicle["stages"]:SUBLIST(0,3).
+	local res_left IS get_prop_mass(vehicle["stages"][2]).
 	
 	update_stage2(current_m, res_left).
 	
@@ -972,31 +977,38 @@ FUNCTION setup_ATO {
 	
 	//need to take care of the stages, contrary to RTLS and TAL we might already be in constant-G mode
 	IF (vehiclestate["cur_stg"]=2) {
+		
+		SET vehicle["stages"] TO vehicle["stages"]:SUBLIST(0,3).
 	
 		SET vehicle["stages"][2]["staging"]["type"] TO "depletion".
 		SET vehicle["stages"][2]["mode"] TO 1.
 		vehicle["stages"][2]:REMOVE("glim").
+		vehicle["stages"][2]:REMOVE("minThrottle").
 		
 		LOCAL current_m IS SHIP:MASS*1000.
-		local res_left IS get_prop_mass(cur_stg).
+		local res_left IS get_prop_mass(vehicle["stages"][2]).
 		
-		SET vehicle["stages"] TO vehicle["stages"]:SUBLIST(0,3).
+		
+		
+		SET ["stages"][2]["engines"] TO build_ssme_lex().
 		
 		update_stage2(current_m, res_left).
 		
-	} ELSe IF (vehiclestate["cur_stg"]=3) {
+	} ELSE IF (vehiclestate["cur_stg"]=3) {
+	
+		SET vehicle["stages"] TO vehicle["stages"]:SUBLIST(0,4).
 	
 		SET vehicle["stages"][3]["staging"]["type"] TO "depletion".
 		SET vehicle["stages"][3]["mode"] TO 1.
 		vehicle["stages"][3]:REMOVE("glim").
-		SET vehicle["stages"][3]["Throttle"] TO 1.
-	
-		SET vehicle["stages"][3]["staging"]["type"] TO "depletion".
-		SET vehicle["stages"][3]["mode"] TO 1.
+		vehicle["stages"][3]:REMOVE("minThrottle").
+		vehicle["stages"][3]:REMOVE("throt_mult").
+		SET ["stages"][3]["engines"] TO build_ssme_lex().
 		
-		LOCAL red_flow IS vehicle["stages"][3]["engines"]["thrust"]/(vehicle["stages"][3]["engines"]["isp"]*g0).
-		SET vehicle["stages"][3]["Tstage"] TO vehicle["stages"][3]["m_burn"]/red_flow.							
-		vehicle["stages"][3]:REMOVE("glim").
+		LOCAL current_m IS SHIP:MASS*1000.
+		local res_left IS get_prop_mass(vehicle["stages"][3]).
+		
+		update_stage3(current_m, res_left).
 		
 	} 
 	

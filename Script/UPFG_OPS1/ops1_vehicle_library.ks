@@ -78,12 +78,7 @@ function initialise_shuttle {
 	
 	//prepare stages list
 	
-	LOCAL engines_lex IS LEXICON(
-				"thrust", ssme_count*vehicle["SSME"]["thrust"]*1000, 
-				"isp", vehicle["SSME"]["isp"], 
-				"flow",ssme_count*vehicle["SSME"]["flow"], 
-				"resources",LIST("LqdHydrogen","LqdOxygen")
-	).
+	LOCAL engines_lex IS build_ssme_lex().
 	
 	
 	vehicle:ADD("stages",LIST()).
@@ -238,10 +233,12 @@ function initialise_shuttle {
 	vehicle:ADD("preburn",5.1).
 	vehicle:ADD(
 		"handover",
-		LEXICON("time", 1000)
+		LEXICON("time", vehicle["SRB_time"] + 5)
 	).
 	vehicle:REMOVE("SRB_time").
 
+
+	setup_engine_failure().
 	
 	WHEN (SHIP:Q > 0.28) THEN {
 		addMessage("THROTTLING DOWN").
@@ -945,7 +942,21 @@ FUNCTION OMS_dump {
 
 }
 
-//coudn active SSMEs and compare with expected number.
+
+FUNCTION build_ssme_lex {
+
+	RETURN LEXICON(
+				"thrust", vehicle["SSME"]["active"]*vehicle["SSME"]["thrust"]*1000, 
+				"isp", vehicle["SSME"]["isp"], 
+				"flow",vehicle["SSME"]["active"]*vehicle["SSME"]["flow"], 
+				"resources",LIST("LqdHydrogen","LqdOxygen")
+	).
+
+
+}
+
+
+//count active SSMEs and compare with expected number.
 FUNCTION SSME_out {
 
 	//get SSME parameters from vehicle struct snd known number of engines 
@@ -958,12 +969,6 @@ FUNCTION SSME_out {
 	}
 	
 	IF (SSMEcount < vehicle["SSME"]["active"]) {
-		SET diff TO  vehicle["SSME"]["active"] - SSMEcount.
-	
-		FROM {LOCAL k IS 1.} UNTIL k > (vehicle["stages"]:LENGTH - 1) STEP { SET k TO k+1.} DO{
-			SET vehicle["stages"][k]["engines"]["thrust"] TO SSMEcount*vehicle["SSME"]["thrust"]*1000.
-			SET vehicle["stages"][k]["engines"]["flow"] TO SSMEcount*vehicle["SSME"]["flow"].
-		}
 		
 		SET vehicle["SSME"]["active"] TO SSMEcount.
 		
