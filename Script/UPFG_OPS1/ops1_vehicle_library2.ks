@@ -64,10 +64,7 @@ function initialise_shuttle {
 	LOCAL et_part IS get_ext_tank_part().
 	
 	
-	LOCAL stack_mass IS 0.
-	FOR p IN getShuttleParts() {
-		set stack_mass to stack_mass + p:mass*1000.
-	}
+	LOCAL stack_mass IS getShuttleStackMass().
 	
 	LOCAL total_prop_mass IS get_prop_mass(
 		LEXICON(
@@ -81,6 +78,13 @@ function initialise_shuttle {
 	
 	//prepare stages list
 	
+	LOCAL engines_lex IS LEXICON(
+				"thrust", ssme_count*vehicle["SSME"]["thrust"]*1000, 
+				"isp", vehicle["SSME"]["isp"], 
+				"flow",ssme_count*vehicle["SSME"]["flow"], 
+				"resources",LIST("LqdHydrogen","LqdOxygen")
+	).
+	
 	
 	vehicle:ADD("stages",LIST()).
 	
@@ -89,7 +93,7 @@ function initialise_shuttle {
 	
 	//stage1 - SRB
 	
-	LOCAL stage1_burned_mass IS vehicle["SRB_time"] * ssme_count * vehicle["SSME"]["flow"].
+	LOCAL stage1_burned_mass IS vehicle["SRB_time"] * engines_lex["flow"].
 	
 	LOCAL stage2InitialMass IS stack_mass - stage1_burned_mass.
 	
@@ -105,13 +109,8 @@ function initialise_shuttle {
 		"ign_t", 0,
 		"Tstage",vehicle["SRB_time"],
 		"Throttle",1,
-		"engines",	
-			LEXICON(
-				"thrust", ssme_count*vehicle["SSME"]["thrust"]*1000, 
-				"isp", vehicle["SSME"]["isp"], 
-				"flow",ssme_count*vehicle["SSME"]["flow"], 
-				"resources",LIST("LqdHydrogen","LqdOxygen")
-		),
+		"minThrottle",vehicle["SSME"]["minThrottle"],	//needed for the max q throttle down
+		"engines",	engines_lex,
 		"ext_tank",et_part,
 		"resources",veh_res,
 		"mode", 1
@@ -135,7 +134,7 @@ function initialise_shuttle {
 		"Tstage",0,
 		"Throttle",1,
 		"minThrottle",vehicle["SSME"]["minThrottle"],
-		"engines", new_stg_1["engines"],
+		"engines",	engines_lex,
 		"ext_tank",et_part,
 		"resources",veh_res,
 		"mode", 1
@@ -172,13 +171,13 @@ function initialise_shuttle {
 		"Throttle",1,
 		"minThrottle",vehicle["SSME"]["minThrottle"],
 		"throt_mult",0,
-		"engines",	new_stg_2["engines"],
+		"engines",	engines_lex,
 		"ext_tank",et_part,
 		"resources",veh_res,
 		"mode", 2
 	).
 	
-	SET new_stg_3["throt_mult"] TO new_stg_3["glim"]*g0/new_stg_3["engines"]["thrust"].
+	SET new_stg_3["throt_mult"] TO new_stg_3["glim"]*g0/engines_lex["thrust"].
 	
 	LOCAL y IS const_G_t_m(new_stg_3).
 	SET new_stg_3["Tstage"] TO y[0].
@@ -188,7 +187,7 @@ function initialise_shuttle {
 	//to avoid problems with mass uncertainties
 	//if it's zero already because there is no need for a fourth stage at all we fall in the same condition 
 	
-	LOCAL min_stage4InitialMass IS stack_empty_mass + 3 * new_stg_3["engines"]["thrust"]*vehicle["SSME"]["minThrottle"] / (new_stg_3["engines"]["isp"]*g0).
+	LOCAL min_stage4InitialMass IS stack_empty_mass + 3 * engines_lex["flow"] * vehicle["SSME"]["minThrottle"] .
 	
 	If stage4InitialMass <= min_stage4InitialMass {
 		//no fourth stage to be added
@@ -217,16 +216,18 @@ function initialise_shuttle {
 			"ign_t", 0,
 			"Tstage",0,
 			"Throttle",vehicle["SSME"]["minThrottle"],
-			"engines", new_stg_1["engines"],
-			"tankparts",et_part,
+			"minThrottle",vehicle["SSME"]["minThrottle"],
+			"engines",	engines_lex,
+			"ext_tank",et_part,
 			"resources",veh_res,
 			"mode", 1
 		).
 		
-		SET new_stg_4["Tstage"] TO new_stg_4["m_burn"]/(new_stg_4["engines"]["flow"] * new_stg_4["Throttle"]).
+		SET new_stg_4["Tstage"] TO const_f_t(new_stg_4).
 	
 		vehicle["stages"]:ADD(new_stg_4).
 	} 
+	
 
 
 	//final vehicle parameters
@@ -239,7 +240,6 @@ function initialise_shuttle {
 		"handover",
 		LEXICON("time", 1000)
 	).
-	vehicle:REMOVE("Ext_Tank_Part").
 	vehicle:REMOVE("SRB_time").
 
 	
@@ -263,51 +263,6 @@ FUNCTION debug_vehicle {
 		wait 0.1.
 	}
 }
-
-
-
-//returns the list of parts making up the Orbiter and External Tank
-function getShuttleParts {
-
-	function removeChildrenPartsRecursively {
-		parameter partslist.
-		parameter part.
-		
-		local partchildren is part:children:copy.
-		
-		if partchildren:length > 0 {
-			for p in partchildren {
-			
-				removeChildrenPartsRecursively(
-					partslist,
-					p 
-				).
-			
-			}
-		}
-		
-		partslist:remove(partslist:find(part)).
-		return.
-
-	}
-	
-	
-	local et is ship:partsdubbed("ShuttleExtTank")[0].
-
-	local shuttleParts is ship:parts:copy.
-
-	removeChildrenPartsRecursively(
-		shuttleParts,
-		et
-	).
-
-	shuttleParts:add(et).
-	
-	return shuttleParts.
-}
-
-
-
 
 
 
@@ -449,13 +404,10 @@ FUNCTION throttleControl {
 	
 	IF stg["mode"] = 2   {
 		SET throtval TO stg["throt_mult"]*SHIP:MASS*1000.
-		SET stg["Throttle"] TO throtval.
 		SET usc["lastthrot"] TO throtval.
 	}
-	
-	SET throtval TO MIN(1,(throtval - minthrot)/(1 - minthrot)).			
-	
-	RETURN MAX(0.005,throtval).
+
+	RETURN CLAMP((throtval - minthrot)/(1 - minthrot),0.005,1).
 }
 
 
@@ -464,6 +416,24 @@ FUNCTION throttleControl {
 
 
 									//VEHICLE PERFORMANCE & STAGING FUNCTIONS
+									
+
+//simple function to check if vehicle is past maxq
+FUNCTION check_maxq {
+	PARAMETER newq.
+	
+	IF (newq >=  surfacestate["q"] ) {
+		SET surfacestate["q"] TO newq.
+	} ELSE {
+		addMessage("VEHICLE HAS REACHED MAX-Q").
+		surfacestate:REMOVE("q").
+		WHEN (SHIP:Q < 0.95*newq) THEN {
+			addMessage("THROTTLING UP").
+			SET vehicle["stages"][1]["Throttle"] TO 1.
+		}
+	}
+
+}
 
 
 FUNCTION get_stage {
@@ -531,11 +501,56 @@ FUNCTION events_handler {
 
 
 
+//compute the total mass of all the parts composing orbiter, payload and ET excluding SRBs and clamps
+function getShuttleStackMass {
+
+	function removeChildrenPartsRecursively {
+		parameter partslist.
+		parameter part.
+		
+		local partchildren is part:children:copy.
+		
+		if partchildren:length > 0 {
+			for p in partchildren {
+			
+				removeChildrenPartsRecursively(
+					partslist,
+					p 
+				).
+			
+			}
+		}
+		
+		partslist:remove(partslist:find(part)).
+		return.
+
+	}
+	
+	LOCAL et_part IS get_ext_tank_part().
+
+	local shuttleParts is ship:parts:copy.
+
+	removeChildrenPartsRecursively(
+		shuttleParts,
+		et_part
+	).
+
+	shuttleParts:add(et_part).
+	
+	LOCAL stackmass IS 0.
+	FOR p IN shuttleParts {
+		set stackmass to stackmass + p:mass*1000.
+	}
+	
+	RETURN stackmass.
+}
+
+
 //calculates burn time for a constant thrust stage 
 FUNCTION const_f_t {
 	PARAMETER stg.
 
-	LOCAL red_flow IS stg["engines"]["thrust"] * stg["throttle"]/(stg["engines"]["isp"]*g0).
+	LOCAL red_flow IS stg["engines"]["flow"] * stg["throttle"].
 	RETURN stg["m_burn"]/red_flow.	
 }
 
@@ -551,6 +566,7 @@ FUNCTION glim_t_m {
 		SET out[1] TO mbreak.
 		SET out[0] TO (stg["m_initial"] - mbreak)/(stg["engines"]["flow"] * stg["Throttle"]).
 	}
+	
 	RETURN out.
 }
 
@@ -855,22 +871,6 @@ FUNCTION ssme_staging_flameout {
 
 
 
-//simple function to check if vehicle is past maxq
-FUNCTION check_maxq {
-	PARAMETER newq.
-	
-	IF (newq >=  surfacestate["q"] ) {
-		SET surfacestate["q"] TO newq.
-	} ELSE {
-		addMessage("VEHICLE HAS REACHED MAX-Q").
-		surfacestate:REMOVE("q").
-		WHEN (SHIP:Q < 0.95*newq) THEN {
-			addMessage("THROTTLING UP").
-			SET vehicle["stages"][1]["Throttle"] TO 1.
-		}
-	}
-
-}
 
 
 
@@ -884,8 +884,9 @@ FUNCTION check_maxq {
 
 
 //return the ET part to read fuel quantities
+//designed to crash if there is no part with this name
 FUNCTION get_ext_tank_part {
-	RETURN SHIP:PARTSDUBBED(vehicle["Ext_Tank_Part"])[0].
+	RETURN SHIP:PARTSDUBBED("ShuttleExtTank")[0].
 }
 
 
