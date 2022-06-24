@@ -35,7 +35,7 @@ FUNCTION monitor_abort {
 	IF abort_detect {
 		addMessage("ENGINE OUT DETECTED.").
 		SET abort_modes["triggered"] TO TRUE.
-		SET abort_modes["t_abort"] TO MAX( current_t + 1, vehicle["handover"]["time"] + 8 ).
+		SET abort_modes["t_abort"] TO MAX( current_t + 1, vehicle["handover"]["time"] + 6 ).
 		SET abort_modes["abort_v"] TO SHIP:VELOCITY:ORBIT:MAG.
 	}
 
