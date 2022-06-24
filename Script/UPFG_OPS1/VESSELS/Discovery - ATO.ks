@@ -1,20 +1,7 @@
 
 GLOBAL vehicle IS LEXICON(
 					"name","Space Shuttle - RS25D",
-					"stages",LIST(0,		//never remove this zero		
-					
-								LEXICON(
-										"m_initial",	1993.889,
-										"m_final",	842.995,
-										"Tstage",120.8
-								),
-								
-								LEXICON(
-										"m_initial",	702.334,
-										"m_final",	112.354			
-								)
-								
-							),
+					"SRB_time",120,
 					"SSME",LEXICON(
 							"isp",453,
 							"thrust",2319.9,
