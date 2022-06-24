@@ -170,9 +170,9 @@ declare function closed_loop_ascent{
 	
 	
 	SET ops_mode TO 2.
-	
 	drawUI().
 	getState().
+	
 	SET STEERINGMANAGER:MAXSTOPPINGTIME TO 0.2.
 	SET STEERINGMANAGER:ROLLTS TO 30.
 	//SET STEERINGMANAGER:YAWTS TO 4.
@@ -184,17 +184,15 @@ declare function closed_loop_ascent{
 		SET target_orbit TO tgt_j2_timefor(target_orbit,300).
 	}													 
 	SET control["refvec"] TO -SHIP:ORBIT:BODY:POSITION:NORMALIZED.
-	IF (DEFINED RTLSAbort) {
-		RTLS_burnout_mass().
-	}
+	
 	LOCAL x IS setupUPFG(target_orbit).
 	GLOBAL upfgInternal IS x[0].
 	GLOBAL usc IS x[1].
-	addMessage("RUNNING UPFG ALGORITHM").
-	
 	SET usc["lastvec"] TO vecYZ(thrust_vec()).
 	SET usc["lastthrot"] TO vehicle["stages"][vehiclestate["cur_stg"]]["Throttle"].
-
+	
+	addMessage("RUNNING UPFG ALGORITHM").
+	
 	dataViz().
 
 	UNTIL FALSE{
