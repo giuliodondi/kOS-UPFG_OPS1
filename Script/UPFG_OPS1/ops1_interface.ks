@@ -287,12 +287,12 @@ FUNCTION dataViz {
 	LOCAL cur_stg_idx IS vehiclestate["cur_stg"].
 	
 	LOCAL total_stg_time IS 0.
-	FOR s IN vehicle["stages"]:SUBLIST(cur_stg_idx,vehicle["stages"]:LENGTH - j) {
-		total_stg_time = total_stg_time + s["Tstage"]
+	FOR s IN vehicle["stages"]:SUBLIST(cur_stg_idx,vehicle["stages"]:LENGTH - cur_stg_idx) {
+		SET total_stg_time TO total_stg_time + s["Tstage"].
 	}
 	
 	PRINTPLACE(sectotime(total_stg_time),12,19,vehloc).
-	PRINTPLACE(" " + ROUND(get_TWR(),2) + " ",12,19,vehloc+1).
+	PRINTPLACE(ROUND(get_TWR(),2) + " ",12,19,vehloc+1).
 	PRINTPLACE(ROUND(THROTTLE*100,1) + " %",12,19,vehloc+2).
 	
 	PRINTPLACE(" " + cur_stg_idx + " ",12,19,vehloc + 3).
