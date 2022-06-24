@@ -193,6 +193,7 @@ function initialise_shuttle {
 	If stage4InitialMass <= min_stage4InitialMass {
 		//no fourth stage to be added
 		SET new_stg_3["staging"]["type"] TO "depletion".
+		SET stage4InitialMass TO 0.
 	} ELSE {
 		SET new_stg_3["m_final"] TO stage4InitialMass.
 		SET new_stg_3["m_burn"] TO new_stg_3["m_initial"] - stage4InitialMass.
