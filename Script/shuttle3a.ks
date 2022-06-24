@@ -2,9 +2,7 @@
 
 //Launch Settings
 
-GLOBAL vesselfilename is "Discovery".     //this is the name of the vessel file to load
-//GLOBAL vesselfilename is "Discovery - RTLS".     //this is the name of the vessel file to load
-
+GLOBAL vesselfilename is "Shuttle_RS_25D".     //this is the name of the vessel file to load
 
 
 //for Vandenberg launches
@@ -28,15 +26,16 @@ GLOBAL target_orbit IS LEXICON (
 								"end",0								//don't remove this
 ).
 
+
+// uncomment this line to trigger automatically an engine failure. Alternatively shutdown manually one of the engines 
+//GLOBAL engine_failure_time IS 150.
+
+
 GLOBAL TAL_site is "Mataveri".
-
-
 
 
 GLOBAL logdata Is false.
 
-//CD("0:/UPFG_latest").
-//run upfg_launch.
 
 CD("0:/UPFG_OPS1").
 run ops1_launch.

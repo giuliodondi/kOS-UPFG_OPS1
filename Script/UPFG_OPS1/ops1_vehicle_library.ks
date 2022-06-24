@@ -880,6 +880,25 @@ FUNCTION ssme_staging_flameout {
 //		SHUTTLE-SPECIFIC FUNCTIONS 
 
 
+//if a global flag is set, sets up an event to shutdown one of the SSMEs
+FUNCTION setup_engine_failure {
+
+	IF (DEFINED engine_failure_time) {
+		
+		events:ADD(	
+			LEXICON(
+					"time",engine_failure_time,
+					"type", "action",
+					"action",{
+								LOCAL englist IS SHIP:PARTSDUBBED("ShuttleSSME").
+								englist[ROUND(RANDOM(),0)]:SHUTDOWN.
+					}
+			)
+		).
+	
+	}
+
+}
 
 
 
