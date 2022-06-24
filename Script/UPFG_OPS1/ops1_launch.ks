@@ -5,7 +5,7 @@ function launch{
 	//	Settings for UPFG
 	SET CONFIG:IPU TO 600.					//	Required to run the script fast enough.
 	GLOBAL upfgFinalizationTime IS 5.		//	When time-to-go gets below that, keep attitude stable and simply count down time to cutoff.
-	GLOBAL upfgConvergenceTgo IS 0.2.	//	Maximum difference between consecutive UPFG T-go predictions that allow accepting the solution.
+	GLOBAL upfgConvergenceTgo IS 1.	//	Maximum difference between consecutive UPFG T-go predictions that allow accepting the solution.
 	GLOBAL upfgConvergenceVec IS 15.	//	Maximum angle between guidance vectors calculated by UPFG between stages that allow accepting the solution.
 
 	
@@ -24,7 +24,7 @@ function launch{
 		
 		
 	RUNPATH("ops1_interface").
-	RUNPATH("ops1_vehicle_library2").
+	RUNPATH("ops1_vehicle_library").
 	RUNPATH("ops1_targeting_library").
 	RUNPATH("ops1_upfg_library").
 	RUNPATH("ops1_abort_library").
