@@ -79,12 +79,12 @@ FUNCTION drawUI {
 	PRINT "|=============================================================|" AT (0,33).
 	PRINT "|         VEHICLE DATA         |     UPFG GUIDANCE DATA       |" AT (0,34).
 	PRINT "|                              |                              |" AT (0,35).
-	PRINT "|   CURRENT STG   :            |                              |" AT (0,36).
-	PRINT "|   STG THRUST    :            |                              |" AT (0,37).
-	PRINT "|   STG TWR       :            |                              |" AT (0,38).
-	PRINT "|   STG REM TIME  :            |                              |" AT (0,39).
+	PRINT "|   TOT BURN TIME :            |                              |" AT (0,36).
+	PRINT "|   CURRENT TWR   :            |                              |" AT (0,37).
+	PRINT "|   CMD THROTTLE  :            |                              |" AT (0,38).
+	PRINT "|   CURRENT STG   :            |                              |" AT (0,39).
 	PRINT "|   STG TYPE      :            |                              |" AT (0,40).
-	PRINT "|   CMD THROTTLE  :            |                              |" AT (0,41).
+	PRINT "|   STG REM TIME  :            |                              |" AT (0,41).
 	PRINT "|                              |                              |" AT (0,42).
 	PRINT "|=============================================================|" AT (0,43).
 	PRINT "|                         MESSAGE BOX:                        |" AT (0,44).
@@ -282,18 +282,27 @@ FUNCTION dataViz {
 	}
 	
 	
-	
-	
 	//vehicle data
+	
+	LOCAL cur_stg_idx IS vehiclestate["cur_stg"].
+	
+	LOCAL total_stg_time IS 0.
+	FOR s IN vehicle["stages"]:SUBLIST(cur_stg_idx,vehicle["stages"]:LENGTH - j) {
+		total_stg_time = total_stg_time + s["Tstage"]
+	}
+	
+	PRINTPLACE(sectotime(total_stg_time),12,19,vehloc).
+	PRINTPLACE(" " + ROUND(get_TWR(),2) + " ",12,19,vehloc+1).
+	PRINTPLACE(ROUND(THROTTLE*100,1) + " %",12,19,vehloc+2).
+	
+	PRINTPLACE(" " + cur_stg_idx + " ",12,19,vehloc + 3).
+	
 	LOCAL stg IS get_stage().
 	
-	
-	PRINTPLACE(" " + vehiclestate["cur_stg"] + " ",12,19,vehloc).
-	PRINTPLACE(ROUND(vehiclestate["avg_thr"]:average()/1000,1) + " kN",12,19,vehloc+1).
-	PRINTPLACE(" " + ROUND(get_TWR(),2) + " ",12,19,vehloc+2).
-	PRINTPLACE(sectotime(stg["Tstage"]),12,19,vehloc+3).
 	PRINTPLACE(stg["staging"]["type"],12,19,vehloc+4).
-	PRINTPLACE(ROUND(THROTTLE*100,1) + " %",12,19,vehloc+5).
+	PRINTPLACE(sectotime(stg["Tstage"]),12,19,vehloc+5).
+	
+	
 
 	
 	
