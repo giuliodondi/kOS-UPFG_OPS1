@@ -545,26 +545,22 @@ FUNCTION glim_t_m {
 FUNCTION const_G_t_m {
 	PARAMETER stg.
 	local out is LIST(0,0).
-
-	local red_isp is stg["engines"]["isp"]/stg["glim"].
 	
-	//compute burn time until  we deplete the stage.	
+	//calculate mass of the vehicle at throttle violation 
+	LOCAL mviol IS stg["engines"]["thrust"] * stg["minThrottle"]/( stg["glim"] * g0 ).
 	
-	LOCAL maxtime IS red_isp * LN(1 + stg["m_burn"]/stg["m_final"] ).
+	//initialise final mass to stage final mass
+	LOCAL m_final IS stg["m_final"].
 	
-	//compute burn time until  we reach minimum throttle.	
-	LOCAL limtime IS - red_isp * LN(stg["minThrottle"]).
-
-	//calculate mass of the fuel burned until violation
-	LOCAL mviol IS stg["m_initial"]*CONSTANT:E^(- limtime/red_isp).
-	
-	IF mviol > stg["m_final"]  {
+	IF mviol > m_final  {
 		SET out[1] TO mviol.
-		SET out[0] TO limtime.
-	} ELSE {
-		SET out[0] TO maxtime.
+		SET m_final TO mviol.
 	}
 	
+	local red_isp is stg["engines"]["isp"]/stg["glim"].
+		
+	//calculate burn time until we reach the final mass 
+	SET out[0] TO red_isp * LN( stg["m_initial"]/m_final ).
 		
 	RETURN out.
 }
