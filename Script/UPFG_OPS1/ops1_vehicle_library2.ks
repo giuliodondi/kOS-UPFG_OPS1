@@ -105,7 +105,6 @@ function initialise_shuttle {
 		"ign_t", 0,
 		"Tstage",vehicle["SRB_time"],
 		"Throttle",1,
-		"minThrottle",vehicle["SSME"]["minThrottle"],
 		"engines",	
 			LEXICON(
 				"thrust", ssme_count*vehicle["SSME"]["thrust"]*1000, 
@@ -171,7 +170,7 @@ function initialise_shuttle {
 		"ign_t", 0,
 		"Tstage",0,
 		"Throttle",1,
-		"minThrottle",new_stg_2["minThrottle"],
+		"minThrottle",vehicle["SSME"]["minThrottle"],
 		"throt_mult",0,
 		"engines",	new_stg_2["engines"],
 		"ext_tank",et_part,
@@ -185,7 +184,13 @@ function initialise_shuttle {
 	SET new_stg_3["Tstage"] TO y[0].
 	LOCAL stage4InitialMass IS y[1].
 	
-	If stage4InitialMass <= 0 {
+	//we don't want to ad a fourth stage unless it burns for at least 3 seconds
+	//to avoid problems with mass uncertainties
+	//if it's zero already because there is no need for a fourth stage at all we fall in the same condition 
+	
+	LOCAL min_stage4InitialMass IS stack_empty_mass + 3 * new_stg_3["engines"]["thrust"]*vehicle["SSME"]["minThrottle"] / (new_stg_3["engines"]["isp"]*g0).
+	
+	If stage4InitialMass <= min_stage4InitialMass {
 		//no fourth stage to be added
 		SET new_stg_3["staging"]["type"] TO "depletion".
 	} ELSE {
@@ -525,6 +530,14 @@ FUNCTION events_handler {
 
 
 
+//calculates burn time for a constant thrust stage 
+FUNCTION const_f_t {
+	PARAMETER stg.
+
+	LOCAL red_flow IS stg["engines"]["thrust"] * stg["throttle"]/(stg["engines"]["isp"]*g0).
+	RETURN stg["m_burn"]/red_flow.	
+}
+
 
 //calculates when the g limit will be violated and the vehicle mass at that moment
 //returns (0,0) if the g-lim is never reached
@@ -656,6 +669,8 @@ FUNCTION getState {
 		LOCAL current_m IS SHIP:MASS*1000.
 		local res_left IS get_prop_mass(cur_stg).
 		
+		SET vehiclestate["m_burn_left"] to res_left.
+		
 		
 		IF (vehiclestate["cur_stg"]=1) {
 		
@@ -693,8 +708,7 @@ FUNCTION update_stage2 {
 	
 	IF (stg2["staging"]["type"]="depletion") {
 		
-		LOCAL red_flow IS stg2["engines"]["thrust"] * stg2["throttle"]/(stg2["engines"]["isp"]*g0).
-		SET stg2["Tstage"] TO stg2["m_burn"]/red_flow.	
+		SET stg2["Tstage"] TO const_f_t(stg2).	
 		
 	} ELSE IF (stg2["staging"]["type"]="glim") {
 		//assume the g limit will be exceeded 
@@ -727,8 +741,7 @@ FUNCTION update_stage3 {
 	IF stg3["mode"]=1 {
 		//constant thrust depletion stage, only used for late ATO aborts
 		
-		LOCAL red_flow IS stg3["engines"]["thrust"] * stg3["throttle"]/(stg3["engines"]["isp"]*g0).
-		SET stg3["Tstage"] TO stg3["m_burn"]/red_flow.
+		SET stg3["Tstage"] TO const_f_t(stg3).	
 	
 	} ELSE IF stg3["mode"]=2 {
 	
@@ -747,7 +760,6 @@ FUNCTION update_stage3 {
 			update_stage4(stg4_m_initial, stg4_m_burn).
 			
 		}
-	
 	}
 }
 
@@ -764,8 +776,7 @@ FUNCTION update_stage4 {
 	SET stg4["m_burn"] TO res_left.
 	SET stg4["m_final"] TO m_initial - res_left.
 	
-	LOCAL red_flow IS stg4["engines"]["thrust"] * stg4["throttle"]/(stg4["engines"]["isp"]*g0).
-	SET stg4["Tstage"] TO stg4["m_burn"]/red_flow.
+	SET stg4["Tstage"] TO const_f_t(stg4).	
 	
 }
 
