@@ -17,6 +17,10 @@ GLOBAL abort_modes IS LEXICON(
 					"ATO",LEXICON(
 							"boundary",421,
 							"active",FALSE
+							),
+					"MECO",LEXICON(
+							"boundary",1000,
+							"active",FALSE
 							)
 							
 ).
@@ -58,6 +62,7 @@ FUNCTION monitor_abort {
 		} ELSE IF abort_modes["ATO"]["active"] {
 			IF ( current_t >= abort_modes["ATO"]["boundary"]  ) {
 				SET abort_modes["ATO"]["active"] TO FALSE.
+				SET abort_modes["MECO"]["active"] TO TRUE.
 				addMessage("PRESS TO MECO.").
 			}
 		}
@@ -88,6 +93,14 @@ FUNCTION monitor_abort {
 			//no need to check the time for ATO / AOA
 			SET abort_modes["ATO"]["active"] TO FALSE.
 			setup_ATO().
+		
+		}  ELSE IF (abort_modes["MECO"]["active"] ) {
+			IF abort_detect {
+				addMessage("PRESSING TO MECO").
+			}
+
+			SET abort_modes["MECO"]["active"] TO FALSE.
+			setup_MECO_ENGOUT().
 		
 		}
 	
@@ -279,6 +292,7 @@ FUNCTION setup_RTLS {
 	
 	SET vehicle["stages"][2]["staging"]["type"] TO "depletion".
 	SET vehicle["stages"][2]["mode"] TO 1.
+	SET vehicle["stages"][2]["Throttle"] TO 1.
 	vehicle["stages"][2]:REMOVE("glim").
 	vehicle["stages"][2]:REMOVE("minThrottle").
 	SET vehicle["stages"][2]["engines"] TO build_ssme_lex().
@@ -873,6 +887,7 @@ FUNCTION setup_TAL {
 	
 	SET vehicle["stages"][2]["staging"]["type"] TO "depletion".
 	SET vehicle["stages"][2]["mode"] TO 1.
+	SET vehicle["stages"][2]["Throttle"] TO 1.
 	vehicle["stages"][2]:REMOVE("glim").
 	vehicle["stages"][2]:REMOVE("minThrottle").
 	SET vehicle["stages"][2]["engines"] TO build_ssme_lex().
@@ -988,6 +1003,7 @@ FUNCTION setup_ATO {
 	
 		SET vehicle["stages"][2]["staging"]["type"] TO "depletion".
 		SET vehicle["stages"][2]["mode"] TO 1.
+		SET vehicle["stages"][2]["Throttle"] TO 1.
 		vehicle["stages"][2]:REMOVE("glim").
 		vehicle["stages"][2]:REMOVE("minThrottle").
 		
@@ -1006,6 +1022,7 @@ FUNCTION setup_ATO {
 	
 		SET vehicle["stages"][3]["staging"]["type"] TO "depletion".
 		SET vehicle["stages"][3]["mode"] TO 1.
+		SET vehicle["stages"][3]["Throttle"] TO 1.
 		vehicle["stages"][3]:REMOVE("glim").
 		vehicle["stages"][3]:REMOVE("minThrottle").
 		vehicle["stages"][3]:REMOVE("throt_mult").
@@ -1033,4 +1050,65 @@ FUNCTION setup_ATO {
 
 
 
+//		POST-ATO ENGINE OUT FUNCTIONS
 
+
+FUNCTION setup_MECO_ENGOUT {
+	IF (DEFINED MECO_ENGOUT) {
+		RETURN.
+	}
+	
+	// declare it to signal that ATO has been initialised
+	GLOBAL MECO_ENGOUT IS LEXICON (
+		"t_abort",TIME:SECONDS
+	).
+
+	//no changes in targeting, just convert the stages to constant thrust depletion stages and trigger dump 
+	
+
+	IF (vehiclestate["cur_stg"]=3) {
+	
+		SET vehicle["stages"] TO vehicle["stages"]:SUBLIST(0,4).
+	
+		SET vehicle["stages"][3]["staging"]["type"] TO "depletion".
+		SET vehicle["stages"][3]["mode"] TO 1.
+		SET vehicle["stages"][3]["Throttle"] TO 1.
+		vehicle["stages"][3]:REMOVE("glim").
+		vehicle["stages"][3]:REMOVE("minThrottle").
+		vehicle["stages"][3]:REMOVE("throt_mult").
+		SET vehicle["stages"][3]["engines"] TO build_ssme_lex().
+		
+		LOCAL current_m IS SHIP:MASS*1000.
+		local res_left IS get_prop_mass(vehicle["stages"][3]).
+		
+		update_stage3(current_m, res_left).
+		
+	} ELSE IF (vehiclestate["cur_stg"]=4) {
+	
+		SET vehicle["stages"][4]["staging"]["type"] TO "depletion".
+		SET vehicle["stages"][4]["mode"] TO 1.
+		SET vehicle["stages"][4]["Throttle"] TO 1.
+		vehicle["stages"][4]:REMOVE("minThrottle").
+		SET vehicle["stages"][4]["engines"] TO build_ssme_lex().
+		
+		LOCAL current_m IS SHIP:MASS*1000.
+		local res_left IS get_prop_mass(vehicle["stages"][4]).
+		
+		update_stage4(current_m, res_left).
+		
+	} 
+	
+	SET upfgInternal TO resetUPFG(upfgInternal).
+	
+	
+	//the dump will actually stop at MECO
+	OMS_dump("oms","start").
+	WHEN ( TIME:SECONDS > (MECO_ENGOUT["t_abort"] + 540) ) THEN {
+		OMS_dump("oms","stop").
+		addMessage("OMS DUMP COMPLETE").
+	}
+	
+	drawUI().
+
+
+}
