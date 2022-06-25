@@ -515,7 +515,7 @@ FUNCTION update_navigation {
 	
 	//measure position and orbit parameters
 	
-	IF ops_mode >1 {set v to SHIP:PROGRADE:VECTOR.}
+	IF vehiclestate["ops_mode"] >1 {set v to SHIP:PROGRADE:VECTOR.}
 	ELSE {set v to SHIP:SRFPROGRADE:VECTOR.}
 	
 	SET surfacestate["hdir"] TO compass_for(v,SHIP:GEOPOSITION ).

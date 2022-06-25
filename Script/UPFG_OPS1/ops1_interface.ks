@@ -120,9 +120,9 @@ FUNCTION drawUI {
 	LOCAL vehstatus IS "CURRENT STATUS : ".
 	LOCAL rtlsdissip Is ( (DEFINED RTLSAbort) AND NOT ( RTLSAbort["pitcharound"]["triggered"] OR RTLSAbort["flyback_flag"] )).
 	
-	IF ops_mode =0 { SET vehstatus TO vehstatus + "INITIAL CLIMB".}
-	ELSE IF ops_mode =1 { SET vehstatus TO vehstatus + "OPEN LOOP ASCENT".}
-	ELSE IF ops_mode =2 { 
+	IF vehiclestate["ops_mode"] =0 { SET vehstatus TO vehstatus + "INITIAL CLIMB".}
+	ELSE IF vehiclestate["ops_mode"] =1 { SET vehstatus TO vehstatus + "OPEN LOOP ASCENT".}
+	ELSE IF vehiclestate["ops_mode"] =2 { 
 		
 		IF (DEFINED RTLSAbort) {
 		
@@ -156,12 +156,12 @@ FUNCTION drawUI {
 		}
 		
 	}
-	ELSE IF ops_mode =3 { SET vehstatus TO vehstatus + "TERMINAL GUIDANCE".}
-	ELSE IF ops_mode =4 { SET vehstatus TO vehstatus + "GUIDANCE TERMINATED". }
+	ELSE IF vehiclestate["ops_mode"] =3 { SET vehstatus TO vehstatus + "TERMINAL GUIDANCE".}
+	ELSE IF vehiclestate["ops_mode"] =4 { SET vehstatus TO vehstatus + "GUIDANCE TERMINATED". }
 	
 	PRINTPLACE(vehstatus ,61,1,12).
 	
-	IF (ops_mode =2) OR (ops_mode =3){	
+	IF (vehiclestate["ops_mode"] =2) OR (vehiclestate["ops_mode"] =3){	
 	
 		PRINT "    S_MODE     : "	AT (32,vehloc).
 		PRINT "    STATUS     : "	AT (32,vehloc+1).
@@ -185,7 +185,7 @@ FUNCTION drawUI {
 		PRINT "AVAILABLE" AT (42,vehloc+3).
 	}
 	
-	IF ops_mode = 4 {
+	IF vehiclestate["ops_mode"] = 4 {
 
 		//LOCAL perilng IS unfixangle(ORBIT:ARGUMENTOFPERIAPSIS).
 		//set perilng to SIGN((perilng))*get_a_cBB(ABS(perilng),ABS(ORBIT:INCLINATION)).
@@ -232,7 +232,7 @@ FUNCTION dataViz {
 	
 	local v is 0.
 	
-	IF ops_mode >1 {set v to SHIP:PROGRADE:VECTOR.}
+	IF vehiclestate["ops_mode"] >1 {set v to SHIP:PROGRADE:VECTOR.}
 	ELSE {set v to SHIP:SRFPROGRADE:VECTOR.}
 
 	PRINTPLACE(ROUND(90 - VANG(SHIP:FACING:VECTOR, SHIP:UP:VECTOR),2) + " deg",12,19,surfloc+2).
@@ -307,7 +307,7 @@ FUNCTION dataViz {
 	
 	
 	//upfg data
-	IF (ops_mode =2) OR (ops_mode =3) {
+	IF (vehiclestate["ops_mode"] =2) OR (vehiclestate["ops_mode"] =3) {
 	
 		PRINTPLACE(target_orbit["mode"],12,50,vehloc).
 		

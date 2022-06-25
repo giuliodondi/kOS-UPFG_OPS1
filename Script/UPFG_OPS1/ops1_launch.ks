@@ -5,6 +5,7 @@ function launch{
 	SET CONFIG:IPU TO 600.					//	Required to run the script fast enough.
 	
 	
+	
 	//	Load libraries
 	RUNPATH("0:/Shuttle_entrysim/landing_sites").
 	RUNPATH("0:/Libraries/misc_library").	
@@ -16,6 +17,7 @@ function launch{
 	RUNPATH("0:/UPFG_OPS1/ops1_upfg_library").
 	RUNPATH("0:/UPFG_OPS1/ops1_abort_library").
 	
+	PRINT " PROGRAM LIBRARIES LOADED" AT (0,1).
 	
 	if logdata=TRUE {	
 		GLOBAL loglex IS LEXICON(
@@ -39,14 +41,7 @@ function launch{
 	}
 	
 	wait until ship:unpacked and ship:loaded.
-	
-	//generic variables
-	
-	GLOBAL ops_mode IS 0.
-	
-
-	
-	
+		
 	initialise_shuttle().
 	prepare_launch().	
 	countdown().
@@ -116,7 +111,7 @@ declare function open_loop_ascent{
 	SET control["refvec"] TO HEADING(control["launch_az"] + 180, 0):VECTOR.
 	LOCAL scale IS MIN(0.2,0.15*( (target_orbit["radius"]:MAG - BODY:RADIUS)/250000 - 1)).																				   
 	
-	SET ops_mode TO 1.
+	SET vehiclestate["ops_mode"] TO 1.
 	getState().
 	
 	WHEN SHIP:VERTICALSPEED >= 36 THEN {
@@ -148,7 +143,7 @@ declare function open_loop_ascent{
 declare function closed_loop_ascent{
 	
 	
-	SET ops_mode TO 2.
+	SET vehiclestate["ops_mode"] TO 2.
 	drawUI().
 	getState().
 	
@@ -230,7 +225,7 @@ declare function closed_loop_ascent{
 		WAIT 0.
 	}
 	
-	SET ops_mode TO 3.
+	SET vehiclestate["ops_mode"] TO 3.
  
 	SET usc["terminal"] TO TRUE.
 	
@@ -315,7 +310,7 @@ declare function closed_loop_ascent{
 			WHEN ( TIME:SECONDS > etsep_t + 15) THEN {
 				close_umbilical().
 				disable_TVC().
-				SET ops_mode TO 4.
+				SET vehiclestate["ops_mode"] TO 4.
 			}
 		}
 	}
@@ -323,7 +318,7 @@ declare function closed_loop_ascent{
 	UNTIL FALSE{
 		getState().
 		
-		IF (ops_mode = 4) {
+		IF (vehiclestate["ops_mode"] = 4) {
 			BREAK.
 		}
 	

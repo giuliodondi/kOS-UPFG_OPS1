@@ -27,7 +27,6 @@ GLOBAL events IS LIST().
 
 
 function initialise_shuttle {
-	CLEARSCREEN.
 
 	RUNPATH("0:/Libraries/resources_library").	
 
@@ -354,6 +353,7 @@ FUNCTION roll_heads_up {
 	IF (vehicle["roll"] <> tgt_roll) {
 		SET vehicle["roll"] TO tgt_roll.
 		SET STEERINGMANAGER:MAXSTOPPINGTIME TO 0.8.
+		addMessage("ROLL TO HEADS-UP ATTITUDE").
 		
 		WHEN (control["roll_angle"] = vehicle["roll"]) THEN {
 			SET STEERINGMANAGER:MAXSTOPPINGTIME TO 0.2.
@@ -826,7 +826,7 @@ FUNCTION increment_stage {
 	
 	SET vehicle["stages"][j+1]["ign_t"] TO vehiclestate["staging_time"].
 	
-	IF ops_mode=2 {
+	IF vehiclestate["ops_mode"]=2 {
 		SET usc["lastthrot"] TO vehicle["stages"][j+1]["Throttle"].
 	}
 	

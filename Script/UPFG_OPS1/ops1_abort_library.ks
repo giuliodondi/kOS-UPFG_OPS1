@@ -404,11 +404,11 @@ FUNCTION GRTLS_dataViz {
 	PRINT "         GLIDE-RTLS GUIDANCE    "  AT (0,1).
 	PRINT "                          "  AT (0,2).
 	
-	IF (ops_mode = 5) {
+	IF (vehiclestate["ops_mode"] = 5) {
 	PRINT "            ALPHA RECOVERY    " AT (0,3).
-	} ELSE IF (ops_mode = 6) {
+	} ELSE IF (vehiclestate["ops_mode"] = 6) {
 	PRINT "            HOLDING PITCH    " AT (0,3).
-	} ELSE IF (ops_mode = 7) {
+	} ELSE IF (vehiclestate["ops_mode"] = 7) {
 	PRINT "               NZ HOLD      " AT (0,3).
 	}
 				   
@@ -569,7 +569,7 @@ FUNCTION GRTLS {
 	
 	RCS ON.
 	SAS OFF.
-	SET ops_mode TO 5.
+	SET vehiclestate["ops_mode"] TO 5.
 	LOCK STEERING TO LOOKDIRUP(aimvec, upvec).
 	
 	
@@ -609,7 +609,7 @@ FUNCTION GRTLS {
 	LOCAL deltanz IS  -  NZHOLD["tgt_nz"].
 	
 	WHEN ( SHIP:ALTITUDE < 60000 OR (NZHOLD["cur_nz"] <0 AND NZHOLD["cur_nz"] > -2 AND SHIP:ALTITUDE < 70000) ) THEN {
-		SET ops_mode TO 6.
+		SET vehiclestate["ops_mode"] TO 6.
 	}
 	
 	
@@ -623,7 +623,7 @@ FUNCTION GRTLS {
 		
 		SET NZHOLD TO update_g_force(NZHOLD).
 		
-		IF (ops_mode >= 6 ) {
+		IF (vehiclestate["ops_mode"] >= 6 ) {
 		
 			flap_control["pitch_control"]:update(-gimbals:PITCHANGLE).
 			SET flap_control TO flaptrim_control( flap_control).
@@ -633,14 +633,14 @@ FUNCTION GRTLS {
 			}
 					
 			//want to switch to mode 7 when the current nz starts to decrease or when it beomes greater than the target nz
-			IF ( ops_mode=6 AND NZHOLD["cur_nz"]>0 AND (prev_nz >= NZHOLD["cur_nz"] OR (NZHOLD["tgt_nz"]>0 AND NZHOLD["cur_nz"] >= NZHOLD["tgt_nz"])) ) {
-				SET ops_mode TO 7.
+			IF ( vehiclestate["ops_mode"]=6 AND NZHOLD["cur_nz"]>0 AND (prev_nz >= NZHOLD["cur_nz"] OR (NZHOLD["tgt_nz"]>0 AND NZHOLD["cur_nz"] >= NZHOLD["tgt_nz"])) ) {
+				SET vehiclestate["ops_mode"] TO 7.
 			}
 			
 			
 			SET deltanz TO NZHOLD["cur_nz"] -  NZHOLD["tgt_nz"].
 			
-			IF (ops_mode = 7 ) {
+			IF (vehiclestate["ops_mode"] = 7 ) {
 				SET pitchv TO MAX(pitchf,MIN(pitch0,nz_update_pitch(pitchv))).
 				SET NZHOLD["cmd_pch"] TO pitchv.
 			}
