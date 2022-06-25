@@ -2,8 +2,19 @@ function launch{
 	CLEARSCREEN.
 	SET TERMINAL:WIDTH TO 65.
 	SET TERMINAL:HEIGHT TO 59.
-	//	Settings for UPFG
 	SET CONFIG:IPU TO 600.					//	Required to run the script fast enough.
+	
+	
+	//	Load libraries
+	RUNPATH("0:/Shuttle_entrysim/landing_sites").
+	RUNPATH("0:/Libraries/misc_library").	
+	RUNPATH("0:/Libraries/maths_library").	
+	RUNPATH("0:/Libraries/navigation_library").	
+	RUNPATH("0:/UPFG_OPS1/ops1_interface").
+	RUNPATH("0:/UPFG_OPS1/ops1_vehicle_library").
+	RUNPATH("0:/UPFG_OPS1/ops1_targeting_library").
+	RUNPATH("0:/UPFG_OPS1/ops1_upfg_library").
+	RUNPATH("0:/UPFG_OPS1/ops1_abort_library").
 	
 	
 	if logdata=TRUE {	
