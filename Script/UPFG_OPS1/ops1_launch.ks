@@ -4,33 +4,6 @@ function launch{
 	SET TERMINAL:HEIGHT TO 59.
 	//	Settings for UPFG
 	SET CONFIG:IPU TO 600.					//	Required to run the script fast enough.
-	GLOBAL upfgFinalizationTime IS 5.		//	When time-to-go gets below that, keep attitude stable and simply count down time to cutoff.
-	GLOBAL upfgConvergenceTgo IS 1.	//	Maximum difference between consecutive UPFG T-go predictions that allow accepting the solution.
-	GLOBAL upfgConvergenceVec IS 15.	//	Maximum angle between guidance vectors calculated by UPFG between stages that allow accepting the solution.
-
-	
-	//	Load vessel config file
-	
-	IF (vesselfilename:ENDSWITH(".ks")=TRUE) {
-		SET vesselfilename TO vesselfilename:REMOVE( vesselfilename:FIND(".ks") ,3 ).
-	}
-	RUNPATH("./VESSELS/" + vesselfilename + ".ks").
-	
-	//	Load libraries
-	RUNPATH("0:/Shuttle_entrysim/landing_sites").
-	RUNPATH("0:/Libraries/misc_library").	
-	RUNPATH("0:/Libraries/maths_library").	
-	RUNPATH("0:/Libraries/navigation_library").	
-		
-		
-	RUNPATH("ops1_interface").
-	RUNPATH("ops1_vehicle_library").
-	RUNPATH("ops1_targeting_library").
-	RUNPATH("ops1_upfg_library").
-	RUNPATH("ops1_abort_library").
-	
-	//conic state extrapolation function / gravity integrator
-	RUNPATH("upfg__cser_sg_simple").
 	
 	
 	if logdata=TRUE {	
@@ -56,22 +29,11 @@ function launch{
 	
 	wait until ship:unpacked and ship:loaded.
 	
-	PRINT " INITIALISING GLOBAL VARIABLES" AT (0,1).
 	//generic variables
 	
 	GLOBAL ops_mode IS 0.
 	
 
-	//Nav variables
-	GLOBAL launchpad IS SHIP:GEOPOSITION.
-	
-	GLOBAL surfacestate IS  LEXICON("MET",0,"az",0,"pitch",0,"alt",0,"vs",0,"hs",0,"vdir",0,"hdir",0,"q",0).
-	GLOBAL orbitstate IS  LEXICON("radius",0,"velocity",0). 
-	GLOBAL control Is LEXICON(
-		"launch_az",0,
-		"steerdir", LOOKDIRUP(SHIP:FACING:FOREVECTOR, SHIP:FACING:TOPVECTOR),
-		"refvec", v(0,0,0)
-	).
 	
 	
 	initialise_shuttle().
@@ -89,6 +51,12 @@ declare function countdown{
 
 	LOCK THROTTLE to throttleControl().
 	SAS OFF.
+	
+	//prepare launch triggers 
+	add_action_event(1, activate_fuel_cells@ ).
+	add_action_event(350, roll_heads_up@ ).
+	
+	
 	local line is 30.
 	print " COUNTDOWN:" AT (0,line).
 	
@@ -157,7 +125,7 @@ declare function open_loop_ascent{
 		local aimVec is HEADING(control["launch_az"],pitch(SHIP:VELOCITY:SURFACE:MAG,25,scale)):VECTOR.
 
 		
-		IF steer_flag { set control["steerdir"] TO aimAndRoll(aimVec,control["refvec"],vehicle["roll"]). }
+		IF steer_flag { set control["steerdir"] TO aimAndRoll(aimVec, vehicle["roll"]). }
 		
 		dataViz().
 		WAIT 0.
@@ -242,7 +210,7 @@ declare function closed_loop_ascent{
 		SET upfgInternal TO upfg_wrapper(upfgInternal).
 		
 		IF NOT vehiclestate["staging_in_progress"] { //AND usc["conv"]=1
-			SET control["steerdir"] TO aimAndRoll(vecYZ(usc["lastvec"]):NORMALIZED,control["refvec"],vehicle["roll"]).										
+			SET control["steerdir"] TO aimAndRoll(vecYZ(usc["lastvec"]):NORMALIZED, vehicle["roll"]).										
 		} 
 		IF vehicle["stages"][vehiclestate["cur_stg"]]["mode"] <> 2 {
 			SET vehicle["stages"][vehiclestate["cur_stg"]]["Throttle"] TO usc["lastthrot"].		

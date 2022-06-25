@@ -2,12 +2,25 @@ GLOBAL g0 IS 9.80665.
 
 
 GLOBAL vehiclestate IS LEXICON(
+	"ops_mode",0,
 	"cur_stg", 1,
 	"staging_time", 0,
 	"staging_in_progress", FALSE,
 	"m_burn_left", 0,
 	"avg_thr", average_value_factory(6)
 ).
+
+
+GLOBAL control Is LEXICON(
+	"launch_az",0,
+	"steerdir", LOOKDIRUP(SHIP:FACING:FOREVECTOR, SHIP:FACING:TOPVECTOR),
+	"roll_angle",0,
+	"refvec", v(0,0,0)
+).
+
+
+
+GLOBAL events IS LIST().
 
 
 //VEHICLE INITIALISATION FUNCTION 
@@ -30,26 +43,32 @@ function initialise_shuttle {
 		RETURN lexx.
 	}
 
-	
-
+	//this must be changed if the RO config for the SRBs ever changes
+	LOCAL srb_time IS 120.
 
 	
 	//hard-coded initialisation of shuttle vehicle
 	
 	
-	//not necessary per se but a useful check to see if we're flying a DECQ shuttle
-	LOCAL ssme_count IS SHIP:PARTSDUBBED("ShuttleSSME"):LENGTH.
-	IF (ssme_count<>3) {
-		PRINT ("ERROR! THE VEHICLE SEEMS TO HAVE THE WRONG NUMBER OF SSMEs") AT (1,40).
-		LOCAL X IS 1/0.
-	}
+	//prepare the main struct 
 	
-	vehicle["SSME"]:ADD(
-		"active",ssme_count
+	GLOBAL vehicle IS LEXICON(
+						"name",SHIP:NAME,
+						"ign_t", 0,
+						"launchTimeAdvance", 300,
+						"preburn",5.1,
+						"roll",180,
+						"handover", LEXICON("time", srb_time + 5),
+						"stages",LIST(),
+						"SSME",0
 	).
 	
-	//	In case user accidentally entered throttle as percentage instead of a fraction
-	IF vehicle["SSME"]["minThrottle"] > 1.0	{ SET vehicle["SSME"]["minThrottle"] TO vehicle["SSME"]["minThrottle"]/100. }
+	SET vehicle["SSME"] TO parse_ssme().
+	
+	//add the ssme type to the vessel name 
+	
+	SET vehicle["name"] TO vehicle["name"] + " " + vehicle["SSME"]["type"].
+
 	
 	local veh_res IS res_dens_init(
 		add_resource(
@@ -81,14 +100,12 @@ function initialise_shuttle {
 	LOCAL engines_lex IS build_ssme_lex().
 	
 	
-	vehicle:ADD("stages",LIST()).
-	
 	//zeroth stage 
 	vehicle["stages"]:ADD(0).
 	
 	//stage1 - SRB
 	
-	LOCAL stage1_burned_mass IS vehicle["SRB_time"] * engines_lex["flow"].
+	LOCAL stage1_burned_mass IS srb_time * engines_lex["flow"].
 	
 	LOCAL stage2InitialMass IS stack_mass - stage1_burned_mass.
 	
@@ -102,7 +119,7 @@ function initialise_shuttle {
 			"ignition",	TRUE
 		),
 		"ign_t", 0,
-		"Tstage",vehicle["SRB_time"],
+		"Tstage",srb_time,
 		"Throttle",1,
 		"minThrottle",vehicle["SSME"]["minThrottle"],	//needed for the max q throttle down
 		"engines",	engines_lex,
@@ -224,18 +241,8 @@ function initialise_shuttle {
 	} 
 	
 
-
-	//final vehicle parameters
 	
-	vehicle:ADD("ign_t", 0).
-	vehicle:ADD("launchTimeAdvance", 300).
-	vehicle:ADD("roll",180).
-	vehicle:ADD("preburn",5.1).
-	vehicle:ADD(
-		"handover",
-		LEXICON("time", vehicle["SRB_time"] + 5)
-	).
-	vehicle:REMOVE("SRB_time").
+	SET control["roll_angle"] TO vehicle["roll"].
 
 
 	setup_engine_failure().
@@ -340,19 +347,42 @@ FUNCTION thrustrot {
 }
 
 
+FUNCTION roll_heads_up {
+
+	LOCAL tgt_roll IS 0.
+	
+	IF (vehicle["roll"] <> tgt_roll) {
+		SET vehicle["roll"] TO tgt_roll.
+		SET STEERINGMANAGER:MAXSTOPPINGTIME TO 0.8.
+		
+		WHEN (control["roll_angle"] = vehicle["roll"]) THEN {
+			SET STEERINGMANAGER:MAXSTOPPINGTIME TO 0.2.
+		}
+	}
+	
+}
+
 
 
 //	Returns a kOS direction for given aim vector, reference up vector and roll angle.
 //corrects for thrust offset
 FUNCTION aimAndRoll {
-	DECLARE PARAMETER aimVec.	//	Expects a vector
-	DECLARE PARAMETER upVec.	//	Expects a vector
-	DECLARE PARAMETER rollAng.	//	Expects a scalar
+	DECLARE PARAMETER aimVec.
+	DECLARE PARAMETER tgtRollAng.
 			 
 	LOCAL steerVec IS aimVec.
 	
-	LOCAL topVec IS VXCL(steerVec,upVec):NORMALIZED.
-	SET topVec TO rodrigues(topVec, steerVec, rollAng).
+	LOCAL newRollAng IS tgtRollAng.
+	
+	IF ABS(tgtRollAng - control["roll_angle"])>5 {
+		local rollsign is SIGN( unfixangle( tgtRollAng - control["roll_angle"] ) ).
+		set control["roll_angle"] TO fixangle(control["roll_angle"] + rollsign*5).
+		SET newRollAng TO control["roll_angle"].
+	}
+	
+	
+	LOCAL topVec IS VXCL(steerVec,control["refvec"]):NORMALIZED.
+	SET topVec TO rodrigues(topVec, steerVec, newRollAng).
 	
 	//if the target aiming vector is too far away in yaw calculate an intermediate vector
 	//project the target vector in the ship vertical plane, rotate this towards the target by 3 degrees in the yaw plane
@@ -438,6 +468,20 @@ FUNCTION get_stage {
 }
 
 
+FUNCTION add_action_event{
+	PARAMETER time.
+	PARAMETER callable.
+	
+	
+	events:ADD(
+		LEXICON(
+				"time",time,
+				"type", "action",
+				"action",callable
+		)
+	).
+}
+
 
 FUNCTION events_handler {
 
@@ -462,19 +506,6 @@ FUNCTION events_handler {
 					}
 				}
 				rem_list:ADD(k).
-			}
-			ELSE IF evt["type"]="roll" {
-								
-				IF ABS(evt["angle"] - vehicle["roll"])<5 {
-					set vehicle["roll"] TO evt["angle"].
-					rem_list:ADD(k).
-					SET STEERINGMANAGER:MAXSTOPPINGTIME TO 0.2.
-					
-				} ELSE {
-					SET STEERINGMANAGER:MAXSTOPPINGTIME TO 0.8.
-					local rollsign is SIGN( unfixangle( evt["angle"] - vehicle["roll"] ) ).
-					set vehicle["roll"] TO fixangle(vehicle["roll"] + rollsign*5).
-				} 
 			}
 			ELSE IF evt["type"]="action" { 
 				IF evt:HASKEY("action") {
@@ -649,24 +680,11 @@ FUNCTION get_prop_mass {
 FUNCTION getState {
 	
 	LOCAL deltat IS surfacestate["MET"].
-	SET surfacestate["MET"] TO TIME:SECONDS. 
+	
+	update_navigation().
+	
 	SET deltat TO surfacestate["MET"] - deltat.
 
-	//measure position and orbit parameters
-	
-	IF ops_mode >1 {set v to SHIP:PROGRADE:VECTOR.}
-	ELSE {set v to SHIP:SRFPROGRADE:VECTOR.}
-	
-	SET surfacestate["hdir"] TO compass_for(v,SHIP:GEOPOSITION ).
-	SET surfacestate["vdir"] TO 90 - VANG(v, SHIP:UP:VECTOR).
-	SET surfacestate["pitch"] TO 90 - VANG(SHIP:FACING:VECTOR, SHIP:UP:VECTOR).	
-	SET surfacestate["az"] TO compass_for(SHIP:FACING:VECTOR,SHIP:GEOPOSITION ).
-	SET surfacestate["alt"] TO SHIP:ALTITUDE.
-	SET surfacestate["vs"] TO SHIP:VERTICALSPEED.
-	SET surfacestate["hs"] TO SHIP:VELOCITY:SURFACE:MAG.
-	
-	SET orbitstate["velocity"] TO vecYZ(SHIP:ORBIT:VELOCITY:ORBIT).
-	SET orbitstate["radius"] TO vecYZ(SHIP:ORBIT:BODY:POSITION)*-1.
 	
 	IF DEFINED events {	events_handler().}
 	
@@ -888,7 +906,7 @@ FUNCTION setup_engine_failure {
 					"type", "action",
 					"action",{
 								LOCAL englist IS SHIP:PARTSDUBBED("ShuttleSSME").
-								englist[ROUND(RANDOM(),0)]:SHUTDOWN.
+								englist[FLOOR(3*RANDOM())]:SHUTDOWN.
 					}
 			)
 		).
@@ -906,6 +924,16 @@ FUNCTION get_ext_tank_part {
 }
 
 
+FUNCTION activate_fuel_cells {
+	
+	for m in SHIP:PARTSDUBBED("ShuttleEngMount")[0]:MODULESNAMED("ModuleResourceConverter") {
+		for an in m:ALLACTIONNAMES {
+			IF an:CONTAINS("start fuel cell") {
+				m:DOACTION(an, true).
+			}
+		}
+	}
+}
 
 
 FUNCTION disable_TVC {
@@ -940,6 +968,64 @@ FUNCTION OMS_dump {
 		}
 	}
 
+}
+
+//check that the three ssme are present and the same type, calculate all the parameters needed
+FUNCTION parse_ssme {
+	
+	LOCAL ssmelex IS LEXICON(
+		"type","",
+		"active",0,
+		"isp",0,
+		"thrust",0,
+		"flow",0,
+		"minThrottle",0
+	
+	).
+	
+	//count SSMEs, not necessary per se but a useful check to see if we're flying a DECQ shuttle
+	LOCAL ssme_count IS 0. 
+	SET ssmelex["type"] TO SHIP:PARTSDUBBED("ShuttleSSME")[0]:CONFIG.
+	
+	FOR ssme IN SHIP:PARTSDUBBED("ShuttleSSME") {
+		IF ssme:ISTYPE("engine") {
+			SET ssme_count TO ssme_count + 1.
+			
+			IF (ssme:CONFIG <> ssmelex["type"]) {
+				PRINT ("ERROR! THE VEHICLE SEEMS TO HAVE MISMATCHED SSME TYPES") AT (1,40).
+				LOCAL X IS 1/0.
+			}
+			
+			LOCAL ssme_thr IS ssme:POSSIBLETHRUSTAT(0.0).
+			LOCAL ssme_isp IS ssme:VACUUMISP.
+			LOCAL ssme_flow IS ssme:MAXMASSFLOW*1000.
+			LOCAL ssme_minthr IS ssme:MINTHROTTLE.
+	
+			SET ssmelex["thrust"] TO ssmelex["thrust"] + ssme_thr.
+			SET ssmelex["isp"] TO ssmelex["isp"] + ssme_isp*ssme_thr.
+			SET ssmelex["flow"] TO ssmelex["flow"] + ssme_flow.
+			SET ssmelex["minThrottle"] TO ssmelex["minThrottle"] + ssme_minthr*ssme_thr.
+			
+		}
+	}
+	
+	IF (ssme_count <> 3 ) {
+		PRINT ("ERROR! THE VEHICLE SEEMS TO HAVE THE WRONG NUMBER OF SSMEs") AT (1,40).
+		LOCAL X IS 1/0.
+	}
+	
+	SET ssmelex["active"] TO ssme_count.
+	
+	SET ssmelex["isp"] TO ssmelex["isp"]/ssmelex["thrust"].
+	SET ssmelex["minThrottle"] TO ssmelex["minThrottle"]/ssmelex["thrust"].
+	
+	SET ssmelex["thrust"] TO ssmelex["thrust"]/ssme_count.
+	SET ssmelex["flow"] TO ssmelex["flow"]/ssme_count.
+
+	
+	
+	RETURN ssmelex.
+	
 }
 
 

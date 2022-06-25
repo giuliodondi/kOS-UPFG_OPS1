@@ -281,7 +281,7 @@ FUNCTION setup_RTLS {
 	SET vehicle["stages"][2]["mode"] TO 1.
 	vehicle["stages"][2]:REMOVE("glim").
 	vehicle["stages"][2]:REMOVE("minThrottle").
-	SET ["stages"][2]["engines"] TO build_ssme_lex().
+	SET vehicle["stages"][2]["engines"] TO build_ssme_lex().
 	
 	LOCAL current_m IS SHIP:MASS*1000.
 	local res_left IS get_prop_mass(vehicle["stages"][2]).
@@ -812,7 +812,7 @@ FUNCTION TAL_cutoff_params {
 	PARAMETER cutoff_r.
 
 	SET tgt_orb["normal"] TO TAL_normal().
-	SET tgt_orb["Inclination"] TO VANG(tgt_orb["normal"],v(0,0,1)).
+	SET tgt_orb["Inclination"] TO VANG(-tgt_orb["normal"],v(0,0,1)).
 	
 	SET tgt_orb["radius"] TO VXCL(tgt_orb["normal"],cutoff_r):NORMALIZED*cutoff_r:MAG.
 	
@@ -875,7 +875,7 @@ FUNCTION setup_TAL {
 	SET vehicle["stages"][2]["mode"] TO 1.
 	vehicle["stages"][2]:REMOVE("glim").
 	vehicle["stages"][2]:REMOVE("minThrottle").
-	SET ["stages"][2]["engines"] TO build_ssme_lex().
+	SET vehicle["stages"][2]["engines"] TO build_ssme_lex().
 	
 	LOCAL current_m IS SHIP:MASS*1000.
 	local res_left IS get_prop_mass(vehicle["stages"][2]).
@@ -890,6 +890,12 @@ FUNCTION setup_TAL {
 		OMS_dump("oms","stop").
 		addMessage("OMS DUMP COMPLETE").
 	}
+	
+	//trigger the roll to heads-up if it hasn't already, important for reentry 
+	WHEN ( TIME:SECONDS > (TALAbort["t_abort"] + 20) ) THEN {
+		roll_heads_up().
+	}
+	
 
 	drawUI().
 }
@@ -923,7 +929,7 @@ FUNCTION ATO_cutoff_params {
 	PARAMETER cutoff_r.
 	
 	SET target["normal"] TO ATO_normal().
-	SET target["Inclination"] TO VANG(target["normal"],v(0,0,1)).	//needs fixing
+	SET target["Inclination"] TO VANG(- target["normal"],v(0,0,1)).
 
 	LOCAL etaa IS 0.
 	local r is cutoff_r:MAG.
@@ -990,7 +996,7 @@ FUNCTION setup_ATO {
 		
 		
 		
-		SET ["stages"][2]["engines"] TO build_ssme_lex().
+		SET vehicle["stages"][2]["engines"] TO build_ssme_lex().
 		
 		update_stage2(current_m, res_left).
 		
@@ -1003,7 +1009,7 @@ FUNCTION setup_ATO {
 		vehicle["stages"][3]:REMOVE("glim").
 		vehicle["stages"][3]:REMOVE("minThrottle").
 		vehicle["stages"][3]:REMOVE("throt_mult").
-		SET ["stages"][3]["engines"] TO build_ssme_lex().
+		SET vehicle["stages"][3]["engines"] TO build_ssme_lex().
 		
 		LOCAL current_m IS SHIP:MASS*1000.
 		local res_left IS get_prop_mass(vehicle["stages"][3]).
